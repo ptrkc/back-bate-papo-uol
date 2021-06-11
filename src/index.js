@@ -2,14 +2,15 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import Joi from "joi";
+import dayjs from "dayjs";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const participants = [
+let participants = [
     { name: "Vader", lastStatus: 12313123 },
-    { name: "Obi Wan", lastStatus: 12313123 },
+    { name: "Yoda", lastStatus: 12313123 },
 ];
 const messages = [
     {
@@ -42,6 +43,8 @@ const messages = [
     },
 ];
 
+scheduleParticipantsUpdate();
+
 app.post("/participants", (req, res) => {
     const schema = Joi.object({
         name: Joi.string()
@@ -56,15 +59,23 @@ app.post("/participants", (req, res) => {
         const errorMsgs = error.details.map((e) => e.message);
         res.status(400).send(errorMsgs);
     } else {
-        if (participants.find((p) => p.name === trimAndClean(req.body.name))) {
+        const cleanName = trimAndClean(req.body.name);
+        if (participants.find((p) => p.name === cleanName)) {
             res.status(409).send("Esse nome já está sendo utilizado.");
         } else {
             participants.push({
-                name: trimAndClean(req.body.name),
+                name: cleanName,
                 lastStatus: Date.now(),
             });
-            res.send("OK");
+            messages.push({
+                from: cleanName,
+                to: "Todos",
+                text: "entra na sala...",
+                type: "status",
+                time: dayjs().format("HH:mm:ss"),
+            });
         }
+        res.send();
     }
 });
 
@@ -96,6 +107,7 @@ app.get("/messages", (req, res) => {
             const filteredMessages = messages.filter(
                 (m) =>
                     m.type === "message" ||
+                    m.to === "Todos" ||
                     m.to === cleanUser ||
                     m.from === cleanUser
             );
@@ -104,7 +116,7 @@ app.get("/messages", (req, res) => {
             }
             res.send(filteredMessages);
         } else {
-            res.status(409).send("Usuário não logado.");
+            res.status(400).send("Usuário não logado.");
         }
     }
 });
@@ -119,4 +131,23 @@ app.listen(4000, () => {
 
 function trimAndClean(string) {
     return string.replace(/(<(.*?)>|>)/gi, "").trim();
+}
+
+function scheduleParticipantsUpdate() {
+    setTimeout(() => {
+        participants = participants.filter((p) => {
+            if (Date.now() - p.lastStatus > 10000) {
+                messages.push({
+                    from: p.name,
+                    to: "Todos",
+                    text: "sai da sala...",
+                    type: "status",
+                    time: dayjs().format("HH:mm:ss"),
+                });
+                return false;
+            } else {
+                return true;
+            }
+        });
+    }, 15000);
 }
