@@ -56,8 +56,7 @@ app.post("/participants", (req, res) => {
         abortEarly: false,
     });
     if (error) {
-        const errorMsgs = error.details.map((e) => e.message);
-        res.status(400).send(errorMsgs);
+        res.sendStatus(400);
     } else {
         const cleanName = trimAndClean(req.body.name);
         if (participants.find((p) => p.name === cleanName)) {
@@ -98,8 +97,7 @@ app.get("/messages", (req, res) => {
         abortEarly: false,
     });
     if (error) {
-        const errorMsgs = error.details.map((e) => e.message);
-        res.status(400).send(errorMsgs);
+        res.sendStatus(400);
     } else {
         const cleanUser = trimAndClean(req.headers.user);
         const limit = req.query.limit && parseInt(req.query.limit);
@@ -116,14 +114,34 @@ app.get("/messages", (req, res) => {
             }
             res.send(filteredMessages);
         } else {
-            res.status(400).send("Usuário não logado.");
+            res.sendStatus(400);
         }
     }
 });
 
-// app.post("/status", (req, res) => {
-//
-// });
+app.post("/status", (req, res) => {
+    const schema = Joi.object({
+        user: Joi.string()
+            .replace(/(<(.*?)>|>)/gi, "")
+            .required()
+            .trim(),
+    }).unknown(true);
+    const { error } = schema.validate(req.headers, {
+        abortEarly: false,
+    });
+    if (error) {
+        res.sendStatus(400);
+    } else {
+        const cleanUser = trimAndClean(req.headers.user);
+        const participant = participants.find((p) => p.name === cleanUser);
+        if (participant) {
+            participant.lastStatus = Date.now();
+            res.sendStatus(200);
+        } else {
+            res.sendStatus(400);
+        }
+    }
+});
 
 app.listen(4000, () => {
     console.log("Running on port 4000");
