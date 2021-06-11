@@ -47,14 +47,9 @@ scheduleParticipantsUpdate();
 
 app.post("/participants", (req, res) => {
     const schema = Joi.object({
-        name: Joi.string()
-            .replace(/(<(.*?)>|>)/gi, "")
-            .required()
-            .trim(),
+        name: Joi.string().replace(/<|>/g, "").required().trim(),
     });
-    const { error } = schema.validate(req.body, {
-        abortEarly: false,
-    });
+    const error = schema.validate(req.body).error;
     if (error) {
         res.sendStatus(400);
     } else {
@@ -74,7 +69,7 @@ app.post("/participants", (req, res) => {
                 time: dayjs().format("HH:mm:ss"),
             });
         }
-        res.send();
+        res.sendStatus(200);
     }
 });
 
@@ -82,20 +77,44 @@ app.get("/participants", (req, res) => {
     res.send(participants);
 });
 
-//app.post("/messages", (req, res) => {
-//
-// });
+app.post("/messages", (req, res) => {
+    const msgSchema = Joi.object({
+        to: Joi.string().replace(/<|>/g, "").required().trim(),
+        text: Joi.string().replace(/<|>/g, "").required().trim(),
+        type: Joi.string()
+            .pattern(new RegExp(/(^message$|^private_message$)/))
+            .required(),
+    });
+    const msgError = msgSchema.validate(req.body).error;
+    const headerSchema = Joi.object({
+        user: Joi.string().replace(/<|>/g, "").required().trim(),
+    }).unknown(true);
+    const headerError = headerSchema.validate(req.headers).error;
+    if (msgError || headerError) {
+        res.sendStatus(400);
+    } else {
+        const cleanUser = trimAndClean(req.headers.user);
+        const participant = participants.find((p) => p.name === cleanUser);
+        if (participant) {
+            messages.push({
+                to: trimAndClean(req.body.to),
+                text: trimAndClean(req.body.text),
+                type: trimAndClean(req.body.type),
+                from: trimAndClean(req.headers.user),
+                time: dayjs().format("HH:mm:ss"),
+            });
+            res.sendStatus(200);
+        } else {
+            res.sendStatus(400);
+        }
+    }
+});
 
 app.get("/messages", (req, res) => {
     const schema = Joi.object({
-        user: Joi.string()
-            .replace(/(<(.*?)>|>)/gi, "")
-            .required()
-            .trim(),
+        user: Joi.string().replace(/<|>/g, "").required().trim(),
     }).unknown(true);
-    const { error } = schema.validate(req.headers, {
-        abortEarly: false,
-    });
+    const error = schema.validate(req.headers).error;
     if (error) {
         res.sendStatus(400);
     } else {
@@ -121,14 +140,9 @@ app.get("/messages", (req, res) => {
 
 app.post("/status", (req, res) => {
     const schema = Joi.object({
-        user: Joi.string()
-            .replace(/(<(.*?)>|>)/gi, "")
-            .required()
-            .trim(),
+        user: Joi.string().replace(/<|>/g, "").required().trim(),
     }).unknown(true);
-    const { error } = schema.validate(req.headers, {
-        abortEarly: false,
-    });
+    const error = schema.validate(req.headers).error;
     if (error) {
         res.sendStatus(400);
     } else {
@@ -148,11 +162,11 @@ app.listen(4000, () => {
 });
 
 function trimAndClean(string) {
-    return string.replace(/(<(.*?)>|>)/gi, "").trim();
+    return string.replace(/<|>/g, "").trim();
 }
 
 function scheduleParticipantsUpdate() {
-    setTimeout(() => {
+    setInterval(() => {
         participants = participants.filter((p) => {
             if (Date.now() - p.lastStatus > 10000) {
                 messages.push({
@@ -162,10 +176,12 @@ function scheduleParticipantsUpdate() {
                     type: "status",
                     time: dayjs().format("HH:mm:ss"),
                 });
+                console.log("removed" + p.name);
                 return false;
             } else {
                 return true;
             }
         });
+        console.log("updated list");
     }, 15000);
 }
