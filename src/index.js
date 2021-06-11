@@ -4,44 +4,16 @@ import fs from "fs";
 import Joi from "joi";
 import dayjs from "dayjs";
 
+const chatData = fs.existsSync("./data/chatData.json")
+    ? JSON.parse(fs.readFileSync("./data/chatData.json"))
+    : { participants: [], messages: [] };
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-let participants = [
-    { name: "Vader", lastStatus: 12313123 },
-    { name: "Yoda", lastStatus: 12313123 },
-];
-const messages = [
-    {
-        from: "Vader",
-        to: "Luke",
-        text: "Eu sou seu pai!",
-        type: "message",
-        time: "20:04:37",
-    },
-    {
-        from: "Luke",
-        to: "Todos",
-        text: "Num pod c",
-        type: "message",
-        time: "20:05:10",
-    },
-    {
-        from: "Obi Wan",
-        to: "Luke",
-        text: "Hello there!",
-        type: "private_message",
-        time: "20:06:14",
-    },
-    {
-        from: "Yoda",
-        to: "Todos",
-        text: "chocado, eu estou",
-        type: "message",
-        time: "20:07:23",
-    },
-];
+let participants = chatData.participants;
+let messages = chatData.messages;
 
 scheduleParticipantsUpdate();
 
@@ -70,6 +42,7 @@ app.post("/participants", (req, res) => {
             });
         }
         res.sendStatus(200);
+        saveData();
     }
 });
 
@@ -104,6 +77,7 @@ app.post("/messages", (req, res) => {
                 time: dayjs().format("HH:mm:ss"),
             });
             res.sendStatus(200);
+            saveData();
         } else {
             res.sendStatus(400);
         }
@@ -132,6 +106,7 @@ app.get("/messages", (req, res) => {
                 filteredMessages.splice(0, filteredMessages.length - limit);
             }
             res.send(filteredMessages);
+            saveData();
         } else {
             res.sendStatus(400);
         }
@@ -151,6 +126,7 @@ app.post("/status", (req, res) => {
         if (participant) {
             participant.lastStatus = Date.now();
             res.sendStatus(200);
+            saveData();
         } else {
             res.sendStatus(400);
         }
@@ -167,6 +143,7 @@ function trimAndClean(string) {
 
 function scheduleParticipantsUpdate() {
     setInterval(() => {
+        let saveTrigger = false;
         participants = participants.filter((p) => {
             if (Date.now() - p.lastStatus > 10000) {
                 messages.push({
@@ -176,12 +153,21 @@ function scheduleParticipantsUpdate() {
                     type: "status",
                     time: dayjs().format("HH:mm:ss"),
                 });
-                console.log("removed" + p.name);
+                saveTrigger = true;
                 return false;
             } else {
                 return true;
             }
         });
-        console.log("updated list");
+        if (saveTrigger) {
+            saveData();
+        }
     }, 15000);
+}
+
+function saveData() {
+    fs.writeFileSync(
+        "./data/chatData.json",
+        JSON.stringify({ participants, messages })
+    );
 }
